@@ -2,6 +2,9 @@ const fs = require('fs');
 const xmlBuilder = require('xmlbuilder');
 let createXMLFile = false;
 let customData = '';
+let hostName = '';
+let attemptId = '';
+let filePath = '';
 
 // Define TestCaseResultDto class
 class TestCaseResultDto {
@@ -21,8 +24,14 @@ class TestResults {
     constructor() {
         this.testCaseResults = '';
         this.customData = '';
+        this.hostName = process.env.HOSTNAME;
+        this.attemptId = process.env.ATTEMPT_ID;
+        this.filePath = __filename;
     }
 }
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
 class PlaywrightCustomReporter {
     constructor(options) {
@@ -39,7 +48,7 @@ class PlaywrightCustomReporter {
             const data = fs.readFileSync('../../custom.ih', 'utf8');
             customData = data;
         } catch (err) {
-            console.error(err);
+            // console.error(err);
         }
     }
 
@@ -59,11 +68,12 @@ class PlaywrightCustomReporter {
         this.clearOutputFiles();
     }
 
-    onTestEnd(test, result) {
+    async onTestEnd(test, result) {
+        let test_Results = new TestResults();
         const testName = test.title.trim();
         const fileName = testName.split(' ')[1]?.toLowerCase(); // Extract the category as file name
 
-        let test_Results = new TestResults();
+
         let testCaseResults = {};
         let resultStatus = result.status === 'passed' ? 'Passed' : 'Failed';
         let resultScore = result.status === 'passed' ? 1 : 0;
@@ -99,28 +109,31 @@ class PlaywrightCustomReporter {
         // Send the results to the server using XMLHttpRequest
         const XMLHttpRequest = require('xhr2');
         const xhr = new XMLHttpRequest();
-        const url =
-            'https://yaksha-prod-sbfn.azurewebsites.net/api/YakshaMFAEnqueue?code=jSTWTxtQ8kZgQ5FC0oLgoSgZG7UoU9Asnmxgp6hLLvYId/GW9ccoLw==';
+        const url = 'https://compiler.techademy.com/v1/mfa-results/push';
         xhr.open('POST', url, true);
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onreadystatechange = function () {
             if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
+                if (xhr.status === 200 || xhr.status === 201) {
                     fs.appendFileSync(
                         './test.txt',
                         `\nSERVER RESPONSE: ${JSON.stringify(xhr.responseText)}`
                     );
-                    console.log('Successfully sent data to the server');
+                    console.log('✅ Successfully sent data to the server!');
                 } else {
                     fs.appendFileSync(
                         './test.txt',
                         `\nSERVER ERROR: ${xhr.status} - ${xhr.statusText}`
                     );
-                    console.error('Failed to send data to the server');
+                    console.error('❌ Failed to send test cases result to the server, PLEASE RE-RUN THE TEST CASES ❌');
                 }
             }
         };
+
         xhr.send(JSON.stringify(test_Results));
+        console.log(JSON.stringify(test_Results));
+        await sleep(5000);
+
     }
 
     onEnd() {
